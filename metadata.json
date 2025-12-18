@@ -1,0 +1,7 @@
+{
+  "name": " german A1 mock test by Entri App",
+  "description": "A comprehensive German A1 Mock Test application covering Reading, Listening, Writing, and Speaking using Gemini AI.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
