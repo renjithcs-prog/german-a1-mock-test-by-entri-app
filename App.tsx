@@ -6,10 +6,11 @@ import WritingModule from './components/modules/WritingModule.tsx';
 import SpeakingModule from './components/modules/SpeakingModule.tsx';
 import { submitTestResults } from './services/submissionService.ts';
 import { generateReadingTest, preloadListeningTest, generateWritingTask, generateSpeakingTask } from './services/geminiService.ts';
-import { BookOpen, Headphones, PenTool, Mic, Award, RotateCcw, ArrowRight, Star, Sparkles, User, Phone, Globe, Lightbulb, Loader2, AlertCircle } from 'lucide-react';
+import { BookOpen, Headphones, PenTool, Mic, Award, RotateCcw, ArrowRight, Star, Sparkles, User, Phone, Globe, Lightbulb, Loader2, AlertCircle, Key } from 'lucide-react';
 
 const App = () => {
   const [state, setState] = useState<AppState>(AppState.HOME);
+  const [hasKey, setHasKey] = useState<boolean>(!!process.env.API_KEY);
   const [scores, setScores] = useState({
     reading: 0,
     listening: 0,
@@ -24,6 +25,24 @@ const App = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Check for selected API key if environment key is missing
+  useEffect(() => {
+    const checkKey = async () => {
+      if (!process.env.API_KEY && (window as any).aistudio) {
+        const selected = await (window as any).aistudio.hasSelectedApiKey();
+        if (selected) setHasKey(true);
+      }
+    };
+    checkKey();
+  }, []);
+
+  const handleOpenKeySelector = async () => {
+    if ((window as any).aistudio) {
+      await (window as any).aistudio.openSelectKey();
+      setHasKey(true); // Proceed after triggering dialog
+    }
+  };
+
   // --- PRELOADING STATE ---
   const [preloadedReading, setPreloadedReading] = useState<any>(null);
   const [preloadedListening, setPreloadedListening] = useState<any>(null);
@@ -32,6 +51,8 @@ const App = () => {
 
   // --- PRELOADING LOGIC ---
   useEffect(() => {
+    if (!hasKey) return;
+    
     if (state === AppState.HOME && !preloadedReading) {
       generateReadingTest().then(setPreloadedReading).catch(e => console.error("BG Load Reading Failed", e));
     }
@@ -44,7 +65,7 @@ const App = () => {
     if (state === AppState.TEST_WRITING && !preloadedSpeaking) {
       generateSpeakingTask().then(setPreloadedSpeaking).catch(e => console.error("BG Load Speaking Failed", e));
     }
-  }, [state, preloadedReading, preloadedListening, preloadedWriting, preloadedSpeaking]);
+  }, [state, preloadedReading, preloadedListening, preloadedWriting, preloadedSpeaking, hasKey]);
 
   const updateScore = (module: keyof typeof scores, score: number) => {
     setScores(prev => ({ ...prev, [module]: score }));
@@ -62,7 +83,7 @@ const App = () => {
     if (score >= 90) {
       return {
         title: "Ready for the Exam! (Sehr Gut)",
-        content: "Your performance is outstanding! You are well-prepared for the real A1 exam. To ensure a perfect score, double-check article genders (der/die/das) and read every question carefully to avoid silly mistakes. Viel Glück!",
+        content: "Your performance is outstanding! You are well-prepared for the real A1 exam. Double-check article genders (der/die/das) for a perfect score. Viel Glück!",
         color: "text-green-800",
         bg: "bg-green-50",
         border: "border-green-200",
@@ -71,7 +92,7 @@ const App = () => {
     } else if (score >= 80) {
       return {
         title: "Very Good Performance (Gut)",
-        content: "You have a solid grasp of the basics. To push for 100%, review plural forms and irregular verb conjugations. Practice speaking aloud to improve your confidence and fluency. You're doing great!",
+        content: "You have a solid grasp. To push for 100%, review plural forms and irregular verb conjugations. Practice speaking aloud to improve confidence. Gut gemacht!",
         color: "text-blue-800",
         bg: "bg-blue-50",
         border: "border-blue-200",
@@ -80,7 +101,7 @@ const App = () => {
     } else if (score >= 60) {
       return {
         title: "Good Start - Keep Practicing (Befriedigend)",
-        content: "You are passing, but there's room for improvement. Focus on the 'Akkusativ' case and modal verbs (können, wollen, müssen). Try listening to German radio or podcasts to get used to the speed of native speakers.",
+        content: "Passing score! Focus on the 'Akkusativ' case and modal verbs. Try listening to German podcasts to get used to native speed. Weiter so!",
         color: "text-yellow-800",
         bg: "bg-yellow-50",
         border: "border-yellow-200",
@@ -89,7 +110,7 @@ const App = () => {
     } else {
       return {
         title: "Needs More Preparation (Ausreichend)",
-        content: "Don't be discouraged! Focus on building your daily vocabulary (numbers, days, family members) and basic sentence structure. Regular practice with flashcards and repeating audio exercises will help immensely. You can do this!",
+        content: "Don't be discouraged! Focus on building daily vocabulary (numbers, family) and basic sentence structure. Regular practice is key. Du schaffst das!",
         color: "text-red-800",
         bg: "bg-red-50",
         border: "border-red-200",
@@ -127,9 +148,6 @@ const App = () => {
     const cleanPhone = phone.replace(/\D/g, '');
     if (cleanPhone.length !== 10) return "Phone number must be exactly 10 digits.";
     if (cleanPhone.startsWith('0')) return "Phone number cannot start with 0.";
-    const blockList = ['1234567890', '9876543210', '0123456789'];
-    if (blockList.includes(cleanPhone)) return "Please enter a valid, real phone number.";
-    if (/^(\d)\1+$/.test(cleanPhone)) return "Please enter a valid phone number (not repeated digits).";
     return null;
   };
 
@@ -145,25 +163,48 @@ const App = () => {
       setFormError(phoneError);
       return;
     }
-    if (userDetails.name && userDetails.phone) {
-      setIsSubmitting(true);
-      const average = getAverageScore();
-      const submissionData = {
-        name: userDetails.name,
-        phone: userDetails.phone,
-        language: userDetails.language,
-        readingScore: Math.round(scores.reading),
-        listeningScore: Math.round(scores.listening),
-        writingScore: Math.round(scores.writing),
-        speakingScore: Math.round(scores.speaking),
-        averageScore: average,
-        timestamp: new Date().toLocaleString()
-      };
-      await submitTestResults(submissionData);
-      setIsSubmitting(false);
-      setState(AppState.RESULTS);
-    }
+    setIsSubmitting(true);
+    const average = getAverageScore();
+    const submissionData = {
+      name: userDetails.name,
+      phone: userDetails.phone,
+      language: userDetails.language,
+      readingScore: Math.round(scores.reading),
+      listeningScore: Math.round(scores.listening),
+      writingScore: Math.round(scores.writing),
+      speakingScore: Math.round(scores.speaking),
+      averageScore: average,
+      timestamp: new Date().toLocaleString()
+    };
+    await submitTestResults(submissionData);
+    setIsSubmitting(false);
+    setState(AppState.RESULTS);
   };
+
+  if (!hasKey) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 text-center animate-fade-in-up border border-slate-100">
+          <div className="w-20 h-20 bg-brand-100 rounded-2xl flex items-center justify-center mx-auto mb-6 text-brand-600">
+            <Key className="w-10 h-10" />
+          </div>
+          <h1 className="text-3xl font-extrabold text-slate-900 mb-4">API Key Required</h1>
+          <p className="text-slate-600 mb-8 leading-relaxed">
+            To provide high-quality AI evaluation using Gemini 3 models, you need to select a billing-enabled API key from your project.
+          </p>
+          <button
+            onClick={handleOpenKeySelector}
+            className="w-full py-4 bg-brand-600 text-white rounded-2xl font-bold text-lg hover:bg-brand-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+          >
+            Initialize Mock Test
+          </button>
+          <p className="mt-6 text-xs text-slate-400">
+            A link to billing documentation can be found at <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="underline hover:text-brand-500">ai.google.dev/gemini-api/docs/billing</a>
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const renderContent = () => {
     switch (state) {
@@ -191,11 +232,6 @@ const App = () => {
                           <span className="text-xl font-bold text-[#2563eb] tracking-tight font-sans">german</span>
                       </div>
                   </div>
-                  <div className="flex gap-2 mt-2">
-                    <div className="w-3 h-3 rounded-full bg-gray-900 animate-bounce [animation-delay:-0.3s]"></div>
-                    <div className="w-3 h-3 rounded-full bg-red-600 animate-bounce [animation-delay:-0.15s]"></div>
-                    <div className="w-3 h-3 rounded-full bg-yellow-500 animate-bounce"></div>
-                  </div>
                 </div>
                 <h1 className="text-5xl lg:text-7xl font-extrabold text-gray-900 leading-tight tracking-tight">
                   Test Your <br />
@@ -213,7 +249,7 @@ const App = () => {
                 </h1>
                 <p className="text-xl text-gray-600 max-w-xl mx-auto lg:mx-0 leading-relaxed">
                   Prepare with confidence using our comprehensive mock test. 
-                  We simulate the real exam structure for Reading, Listening, Writing, and Speaking using advanced AI to grade you instantly.
+                  Simulate the real exam structure for Reading, Listening, Writing, and Speaking using advanced AI to grade you instantly.
                 </p>
                 <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4 justify-center lg:justify-start">
                   <button
@@ -242,13 +278,12 @@ const App = () => {
               </div>
             </div>
             <div className="max-w-7xl mx-auto px-4 lg:px-8 pb-12 w-full mt-10">
-               <p className="text-center text-gray-400 font-medium uppercase tracking-widest text-sm mb-8">What's included in the test</p>
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {[
                   { icon: BookOpen, label: 'Lesen (Reading)', desc: 'Comprehension of texts & emails', color: 'text-blue-500', bg: 'bg-blue-50' },
-                  { icon: Headphones, label: 'Hören (Listening)', desc: 'Understanding dialogues & announcements', color: 'text-purple-500', bg: 'bg-purple-50' },
-                  { icon: PenTool, label: 'Schreiben (Writing)', desc: 'Form filling & short messages', color: 'text-pink-500', bg: 'bg-pink-50' },
-                  { icon: Mic, label: 'Sprechen (Speaking)', desc: 'Self-introduction & conversation', color: 'text-orange-500', bg: 'bg-orange-50' }
+                  { icon: Headphones, label: 'Hören (Listening)', desc: 'Understanding dialogues', color: 'text-purple-500', bg: 'bg-purple-50' },
+                  { icon: PenTool, label: 'Schreiben (Writing)', desc: 'Short messages & tasks', color: 'text-pink-500', bg: 'bg-pink-50' },
+                  { icon: Mic, label: 'Sprechen (Speaking)', desc: 'AI-guided speaking assessment', color: 'text-orange-500', bg: 'bg-orange-50' }
                 ].map((item, i) => (
                   <div key={i} className="group bg-white/80 backdrop-blur-sm p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-default">
                     <div className={`w-12 h-12 ${item.bg} rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
@@ -279,14 +314,11 @@ const App = () => {
                   <User className="w-8 h-8" />
                 </div>
                 <h2 className="text-2xl font-bold text-gray-900">Final Step</h2>
-                <p className="text-gray-600 mt-2">Enter your details to generate your score report.</p>
+                <p className="text-gray-600 mt-2">Enter details to generate your score report.</p>
               </div>
               <form onSubmit={handleFormSubmit} className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                    <User className="w-4 h-4" />
-                    Full Name
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
                   <input
                     type="text"
                     required
@@ -301,10 +333,7 @@ const App = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                    <Phone className="w-4 h-4" />
-                    Phone Number
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
                   <input
                     type="tel"
                     required
@@ -314,16 +343,13 @@ const App = () => {
                       if (val.length <= 15) setUserDetails({ ...userDetails, phone: val });
                       setFormError(null);
                     }}
-                    className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-brand-500 outline-none transition-all ${formError && formError.includes('Phone') ? 'border-red-500 bg-red-50 focus:border-red-500' : 'border-gray-300 focus:border-brand-500'}`}
-                    placeholder="Enter 10-digit phone number"
+                    className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-brand-500 outline-none transition-all ${formError ? 'border-red-500' : 'border-gray-300'}`}
+                    placeholder="10-digit phone number"
                     disabled={isSubmitting}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                    <Globe className="w-4 h-4" />
-                    Preferred Language
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Preferred Language</label>
                   <select
                     value={userDetails.language}
                     onChange={(e) => setUserDetails({ ...userDetails, language: e.target.value })}
@@ -336,8 +362,8 @@ const App = () => {
                   </select>
                 </div>
                 {formError && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700 text-sm animate-fade-in-up">
-                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700 text-sm">
+                    <AlertCircle className="w-4 h-4" />
                     <span>{formError}</span>
                   </div>
                 )}
@@ -346,14 +372,7 @@ const App = () => {
                   disabled={isSubmitting}
                   className="w-full py-4 bg-brand-600 hover:bg-brand-700 disabled:bg-brand-400 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5 mt-4 flex items-center justify-center space-x-2"
                 >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      <span>Generating Report...</span>
-                    </>
-                  ) : (
-                    <span>View My Results</span>
-                  )}
+                  {isSubmitting ? <Loader2 className="animate-spin w-5 h-5" /> : <span>View Results</span>}
                 </button>
               </form>
             </div>
@@ -363,39 +382,32 @@ const App = () => {
         const average = getAverageScore();
         const tips = getExamTips(average);
         return (
-          <div className="flex flex-col items-center max-w-2xl mx-auto space-y-8 animate-fade-in py-10 relative px-4">
-            <div className="text-center space-y-4 mb-8">
-              <div className="relative inline-block">
-                <div className="absolute inset-0 bg-yellow-100 rounded-full animate-ping opacity-20"></div>
-                <Award className="w-24 h-24 text-yellow-500 relative z-10 drop-shadow-lg" />
-              </div>
-              <div>
-                <h2 className="text-4xl font-extrabold text-gray-900">Herzlichen Glückwunsch, <br/><span className="text-brand-600">{userDetails.name}</span>!</h2>
-                <p className="text-lg text-gray-600 mt-2">You have completed the full A1 Mock Test.</p>
-              </div>
+          <div className="flex flex-col items-center max-w-2xl mx-auto space-y-8 animate-fade-in py-10 px-4">
+            <div className="text-center space-y-4">
+              <Award className="w-20 h-20 text-yellow-500 mx-auto drop-shadow-lg" />
+              <h2 className="text-4xl font-extrabold text-gray-900">Herzlichen Glückwunsch, <span className="text-brand-600">{userDetails.name}</span>!</h2>
+              <p className="text-lg text-gray-600">You've completed the A1 Mock Test.</p>
             </div>
-            <div className="w-full bg-white p-8 rounded-2xl shadow-xl border border-gray-100 transform hover:scale-[1.01] transition-transform duration-500">
-               <div className="flex flex-col md:flex-row justify-between items-center mb-8 pb-8 border-b border-gray-100">
-                  <div className="text-center md:text-left mb-4 md:mb-0">
-                    <span className="block text-gray-500 text-sm font-semibold uppercase tracking-wider">Overall Score</span>
+            <div className="w-full bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
+               <div className="flex justify-between items-center mb-8 pb-8 border-b border-gray-100">
+                  <div className="text-left">
+                    <span className="block text-gray-500 text-sm font-semibold uppercase">Overall Score</span>
                     <span className="text-3xl font-bold text-gray-800">Gesamtnote</span>
                   </div>
-                  <div className={`flex items-center justify-center w-32 h-32 rounded-full border-8 ${average >= 60 ? 'border-green-500 text-green-600 bg-green-50' : 'border-red-500 text-red-600 bg-red-50'}`}>
-                    <span className="text-4xl font-extrabold">{average}%</span>
+                  <div className={`flex items-center justify-center w-28 h-28 rounded-full border-8 ${average >= 60 ? 'border-green-500 text-green-600' : 'border-red-500 text-red-600'}`}>
+                    <span className="text-3xl font-black">{average}%</span>
                   </div>
                </div>
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                  {[
-                   { label: 'Reading (Lesen)', score: scores.reading, icon: BookOpen, color: 'text-blue-500', bg: 'bg-blue-50' },
-                   { label: 'Listening (Hören)', score: scores.listening, icon: Headphones, color: 'text-purple-500', bg: 'bg-purple-50' },
-                   { label: 'Writing (Schreiben)', score: scores.writing, icon: PenTool, color: 'text-pink-500', bg: 'bg-pink-50' },
-                   { label: 'Speaking (Sprechen)', score: scores.speaking, icon: Mic, color: 'text-orange-500', bg: 'bg-orange-50' },
+                   { label: 'Reading', score: scores.reading, icon: BookOpen, color: 'text-blue-500' },
+                   { label: 'Listening', score: scores.listening, icon: Headphones, color: 'text-purple-500' },
+                   { label: 'Writing', score: scores.writing, icon: PenTool, color: 'text-pink-500' },
+                   { label: 'Speaking', score: scores.speaking, icon: Mic, color: 'text-orange-500' },
                  ].map((mod, i) => (
-                   <div key={i} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
+                   <div key={i} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
                      <div className="flex items-center space-x-3">
-                       <div className={`p-2 ${mod.bg} rounded-lg`}>
-                         <mod.icon className={`w-5 h-5 ${mod.color}`} />
-                       </div>
+                       <mod.icon className={`w-5 h-5 ${mod.color}`} />
                        <span className="font-semibold text-gray-700">{mod.label}</span>
                      </div>
                      <span className={`font-bold ${mod.score >= 60 ? 'text-green-600' : 'text-red-500'}`}>{Math.round(mod.score)}%</span>
@@ -403,28 +415,22 @@ const App = () => {
                  ))}
                </div>
             </div>
-            <div className={`w-full p-6 rounded-2xl border ${tips.border} ${tips.bg} shadow-md animate-fade-in-up delay-150`}>
+            <div className={`w-full p-6 rounded-2xl border ${tips.border} ${tips.bg}`}>
               <div className="flex items-start space-x-4">
-                <div className={`p-3 bg-white rounded-full shadow-sm flex-shrink-0 ${tips.iconColor}`}>
-                   <Lightbulb className="w-6 h-6" />
-                </div>
+                <Lightbulb className={`w-6 h-6 mt-1 ${tips.iconColor}`} />
                 <div>
                    <h3 className={`text-lg font-bold mb-2 ${tips.color}`}>{tips.title}</h3>
-                   <p className={`${tips.color} opacity-90 leading-relaxed`}>{tips.content}</p>
+                   <p className={`${tips.color} opacity-90`}>{tips.content}</p>
                 </div>
               </div>
             </div>
             <button
               onClick={() => {
                 setScores({ reading: 0, listening: 0, writing: 0, speaking: 0 });
-                setUserDetails({ name: '', phone: '', language: 'Malayalam' });
                 setState(AppState.HOME);
-                setPreloadedReading(null);
-                setPreloadedListening(null);
-                setPreloadedWriting(null);
-                setPreloadedSpeaking(null);
+                setPreloadedReading(null); setPreloadedListening(null); setPreloadedWriting(null); setPreloadedSpeaking(null);
               }}
-              className="mt-8 flex items-center space-x-2 px-10 py-4 bg-brand-600 text-white rounded-full font-bold hover:bg-brand-700 transition-all shadow-lg hover:shadow-2xl hover:-translate-y-1"
+              className="mt-8 flex items-center space-x-2 px-10 py-4 bg-brand-600 text-white rounded-full font-bold hover:bg-brand-700 transition-all"
             >
               <RotateCcw className="w-5 h-5" />
               <span>Take Test Again</span>
@@ -437,24 +443,13 @@ const App = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-brand-200">
-      <header className="bg-white/90 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50 transition-all duration-300">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
+      <header className="bg-white/90 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-2 cursor-pointer group" onClick={() => setState(AppState.HOME)}>
-             <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center text-white font-bold group-hover:bg-brand-700 transition-colors shadow-sm">G</div>
-             <span className="font-bold text-xl tracking-tight text-gray-900">German A1 <span className="text-brand-600">Mock Test</span></span>
+          <div className="flex items-center space-x-2 cursor-pointer" onClick={() => setState(AppState.HOME)}>
+             <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center text-white font-bold">G</div>
+             <span className="font-bold text-xl text-gray-900">German A1 Mock Test</span>
           </div>
-          {state !== AppState.HOME && state !== AppState.RESULTS && state !== AppState.USER_DETAILS_FORM && (
-             <div className="hidden md:flex items-center space-x-2 text-sm font-medium text-gray-500">
-                <span className={`px-2 py-1 rounded ${state === AppState.TEST_READING ? 'bg-brand-50 text-brand-700' : ''}`}>Lesen</span>
-                <span className="text-gray-300">&rarr;</span>
-                <span className={`px-2 py-1 rounded ${state === AppState.TEST_LISTENING ? 'bg-brand-50 text-brand-700' : ''}`}>Hören</span>
-                <span className="text-gray-300">&rarr;</span>
-                <span className={`px-2 py-1 rounded ${state === AppState.TEST_WRITING ? 'bg-brand-50 text-brand-700' : ''}`}>Schreiben</span>
-                <span className="text-gray-300">&rarr;</span>
-                <span className={`px-2 py-1 rounded ${state === AppState.TEST_SPEAKING ? 'bg-brand-50 text-brand-700' : ''}`}>Sprechen</span>
-             </div>
-          )}
         </div>
       </header>
       <main className="w-full">

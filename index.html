@@ -9,8 +9,8 @@
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <script>
-      // Shim process.env for browser compatibility
-      window.process = window.process || { env: { API_KEY: "" } };
+      // Shim process.env for browser compatibility without providing an empty key
+      window.process = window.process || { env: {} };
       
       tailwind.config = {
         theme: {
@@ -89,6 +89,6 @@
 </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
+    <script type="module" src="index.tsx"></script>
   </body>
 </html>
