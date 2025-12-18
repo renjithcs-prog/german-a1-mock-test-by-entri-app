@@ -39,7 +39,7 @@ const getSheetUrl = () => {
   }
   
   // 2. Return hardcoded URL provided by user
-  return 'https://script.google.com/macros/s/AKfycbw7wpzYSLRYAsdkI2z7qEl03hyBLiScoUubRCOkqOicE1aNWgDrPxzUpgfST0UIrSYqLg/exec'; 
+  return 'https://script.google.com/macros/s/AKfycbyTQXbArXeIawBujYNZfGmCInR0MfvO9F093cDhnvor9eSXWo7klYzhirEy0ZKzBH-uPQ/exec'; 
 };
 
 export const submitTestResults = async (data: TestSubmissionData) => {
@@ -51,8 +51,6 @@ export const submitTestResults = async (data: TestSubmissionData) => {
   }
 
   try {
-    // We utilize URLSearchParams to ensure the data is sent as application/x-www-form-urlencoded.
-    // This is the most reliable method to ensure `e.parameter` is populated in Google Apps Script.
     const params = new URLSearchParams();
     params.append('name', data.name);
     params.append('phone', data.phone);
@@ -64,7 +62,6 @@ export const submitTestResults = async (data: TestSubmissionData) => {
     params.append('averageScore', data.averageScore.toString());
     params.append('timestamp', data.timestamp);
 
-    // mode: 'no-cors' is mandatory for client-side requests to Google Scripts.
     await fetch(GOOGLE_SCRIPT_URL, {
       method: 'POST',
       mode: 'no-cors',

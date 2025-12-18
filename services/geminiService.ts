@@ -1,46 +1,12 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { ReadingTestContent, ListeningTestContent, WritingTask, SpeakingTask, EvaluationResult } from "../types";
 
-// Helper to safely get API key from various environment variable patterns
-const getApiKey = (): string => {
-  // 1. Try standard process.env (Node.js / Webpack / CRA / Next.js)
-  try {
-    if (typeof process !== 'undefined' && process.env) {
-      if (process.env.API_KEY) return process.env.API_KEY;
-      if (process.env.REACT_APP_API_KEY) return process.env.REACT_APP_API_KEY;
-      if (process.env.NEXT_PUBLIC_API_KEY) return process.env.NEXT_PUBLIC_API_KEY;
-    }
-  } catch (e) {}
+// The API key must be obtained exclusively from the environment variable process.env.API_KEY
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-  // 2. Try import.meta.env (Vite / Modern Standards)
-  try {
-    // @ts-ignore
-    if (typeof import.meta !== 'undefined' && import.meta.env) {
-      // @ts-ignore
-      if (import.meta.env.VITE_API_KEY) return import.meta.env.VITE_API_KEY;
-      // @ts-ignore
-      if (import.meta.env.API_KEY) return import.meta.env.API_KEY;
-    }
-  } catch (e) {}
-
-  return '';
-};
-
-// Helper to initialize the client only when needed.
-const getAIClient = () => {
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    throw new Error(
-      "API Key is missing. " +
-      "If using Vite on Vercel, rename your environment variable to 'VITE_API_KEY'. " +
-      "If using Next.js, name it 'NEXT_PUBLIC_API_KEY'. " +
-      "Otherwise, ensure 'API_KEY' is exposed to the client."
-    );
-  }
-  return new GoogleGenAI({ apiKey });
-};
-
-const modelFlash = 'gemini-2.5-flash';
+const modelGeneration = 'gemini-3-flash-preview';
+const modelEvaluation = 'gemini-3-pro-preview';
+const modelTTS = 'gemini-2.5-flash-preview-tts';
 
 // Helper to clean JSON string if model wraps it in markdown
 const cleanJson = (text: string) => {
@@ -59,7 +25,6 @@ const getRandomContext = () => {
 
 /**
  * RETRY LOGIC HELPER
- * Handles 503 (Overloaded) and 429 (Too Many Requests) errors by retrying.
  */
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -72,7 +37,6 @@ const runWithRetry = async <T>(operation: () => Promise<T>, retries = 3, baseDel
       lastError = error;
       const errorMsg = (error.message || JSON.stringify(error)).toLowerCase();
       
-      // Check for transient errors
       const isTransient = 
         errorMsg.includes('503') || 
         errorMsg.includes('overloaded') || 
@@ -81,7 +45,7 @@ const runWithRetry = async <T>(operation: () => Promise<T>, retries = 3, baseDel
         errorMsg.includes('429');
       
       if (isTransient && i < retries - 1) {
-        const delay = baseDelay * Math.pow(2, i); // Exponential backoff: 1.5s, 3s, 6s
+        const delay = baseDelay * Math.pow(2, i);
         console.warn(`Gemini API busy (Attempt ${i + 1}/${retries}). Retrying in ${delay}ms...`);
         await sleep(delay);
         continue;
@@ -97,11 +61,10 @@ const runWithRetry = async <T>(operation: () => Promise<T>, retries = 3, baseDel
 export const generateReadingTest = async (): Promise<ReadingTestContent> => {
   return runWithRetry(async () => {
     try {
-      const ai = getAIClient();
       const context = getRandomContext();
       
       const response = await ai.models.generateContent({
-        model: modelFlash,
+        model: modelGeneration,
         contents: `Create German A1 reading test. 2 parts. 
         Part 1: Email (40 words).
         Part 2: Notice/Sign (20 words).
@@ -155,11 +118,10 @@ export const generateReadingTest = async (): Promise<ReadingTestContent> => {
 export const generateListeningTestScript = async (): Promise<ListeningTestContent> => {
   return runWithRetry(async () => {
     try {
-      const ai = getAIClient();
       const context = getRandomContext();
       
       const response = await ai.models.generateContent({
-        model: modelFlash,
+        model: modelGeneration,
         contents: `Create German A1 listening script. 2 parts.
         Part 1: Dialogue (30 words).
         Part 2: Announcement (20 words).
@@ -214,9 +176,8 @@ export const generateListeningTestScript = async (): Promise<ListeningTestConten
 export const generateAudioFromScript = async (script: string): Promise<string> => {
   return runWithRetry(async () => {
     try {
-      const ai = getAIClient();
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-preview-tts',
+        model: modelTTS,
         contents: [{ parts: [{ text: script }] }],
         config: {
           responseModalities: [Modality.AUDIO],
@@ -237,12 +198,9 @@ export const generateAudioFromScript = async (script: string): Promise<string> =
   });
 };
 
-// ** NEW HELPER FOR PRELOADING **
-// Generates the script AND fetches the audio bytes in parallel
 export const preloadListeningTest = async (): Promise<{ content: ListeningTestContent, audioParts: string[] }> => {
   const content = await generateListeningTestScript();
   const audioPromises = content.parts.map((part, index) => {
-      // Short pause between parts
       const textToSpeak = `Teil ${index + 1}. ${part.type}. ${part.content}`;
       return generateAudioFromScript(textToSpeak);
   });
@@ -255,11 +213,10 @@ export const preloadListeningTest = async (): Promise<{ content: ListeningTestCo
 export const generateWritingTask = async (): Promise<WritingTask> => {
   return runWithRetry(async () => {
     try {
-      const ai = getAIClient();
       const context = getRandomContext();
 
       const response = await ai.models.generateContent({
-        model: modelFlash,
+        model: modelGeneration,
         contents: `German A1 writing task. ${context} Ask user to write short email covering 3 points. Provide topic and instructions.`,
         config: {
           responseMimeType: "application/json",
@@ -285,9 +242,8 @@ export const generateWritingTask = async (): Promise<WritingTask> => {
 export const evaluateWriting = async (task: WritingTask, userText: string): Promise<EvaluationResult> => {
   return runWithRetry(async () => {
     try {
-      const ai = getAIClient();
       const response = await ai.models.generateContent({
-        model: modelFlash,
+        model: modelEvaluation,
         contents: `Task: ${task.instructions}\nUser Text: ${userText}\n\nEvaluate for German A1. Check 3 points. Score out of 100. Concise feedback (max 3 sentences). List corrections.`,
         config: {
           responseMimeType: "application/json",
@@ -316,11 +272,10 @@ export const evaluateWriting = async (task: WritingTask, userText: string): Prom
 export const generateSpeakingTask = async (): Promise<SpeakingTask> => {
   return runWithRetry(async () => {
     try {
-      const ai = getAIClient();
       const context = getRandomContext();
 
       const response = await ai.models.generateContent({
-        model: modelFlash,
+        model: modelGeneration,
         contents: `German A1 speaking task. ${context} Ask user to speak about a topic covering 3 points. Instructions only.`,
         config: {
           responseMimeType: "application/json",
@@ -346,7 +301,6 @@ export const generateSpeakingTask = async (): Promise<SpeakingTask> => {
 export const evaluateSpeaking = async (task: SpeakingTask, input: { audioBase64?: string, text?: string }): Promise<EvaluationResult> => {
   return runWithRetry(async () => {
     try {
-      const ai = getAIClient();
       const parts: any[] = [];
       
       if (input.audioBase64) {
@@ -365,7 +319,7 @@ export const evaluateSpeaking = async (task: SpeakingTask, input: { audioBase64?
       }
 
       const response = await ai.models.generateContent({
-        model: modelFlash,
+        model: modelEvaluation,
         contents: { parts },
         config: {
           responseMimeType: "application/json",
