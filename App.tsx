@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { AppState } from './types';
-import ReadingModule from './components/modules/ReadingModule';
-import ListeningModule from './components/modules/ListeningModule';
-import WritingModule from './components/modules/WritingModule';
-import SpeakingModule from './components/modules/SpeakingModule';
-import { submitTestResults } from './services/submissionService';
-import { generateReadingTest, preloadListeningTest, generateWritingTask, generateSpeakingTask } from './services/geminiService';
+import { AppState } from './types.ts';
+import ReadingModule from './components/modules/ReadingModule.tsx';
+import ListeningModule from './components/modules/ListeningModule.tsx';
+import WritingModule from './components/modules/WritingModule.tsx';
+import SpeakingModule from './components/modules/SpeakingModule.tsx';
+import { submitTestResults } from './services/submissionService.ts';
+import { generateReadingTest, preloadListeningTest, generateWritingTask, generateSpeakingTask } from './services/geminiService.ts';
 import { BookOpen, Headphones, PenTool, Mic, Award, RotateCcw, ArrowRight, Star, Sparkles, User, Phone, Globe, Lightbulb, Loader2, AlertCircle } from 'lucide-react';
 
 const App = () => {
@@ -25,7 +25,6 @@ const App = () => {
   const [formError, setFormError] = useState<string | null>(null);
 
   // --- PRELOADING STATE ---
-  // These hold content generated in the background to ensure instant transitions
   const [preloadedReading, setPreloadedReading] = useState<any>(null);
   const [preloadedListening, setPreloadedListening] = useState<any>(null);
   const [preloadedWriting, setPreloadedWriting] = useState<any>(null);
@@ -33,22 +32,15 @@ const App = () => {
 
   // --- PRELOADING LOGIC ---
   useEffect(() => {
-    // 1. Preload Reading immediately on Home
     if (state === AppState.HOME && !preloadedReading) {
       generateReadingTest().then(setPreloadedReading).catch(e => console.error("BG Load Reading Failed", e));
     }
-
-    // 2. Preload Listening while user is doing Reading
     if (state === AppState.TEST_READING && !preloadedListening) {
       preloadListeningTest().then(setPreloadedListening).catch(e => console.error("BG Load Listening Failed", e));
     }
-
-    // 3. Preload Writing while user is doing Listening
     if (state === AppState.TEST_LISTENING && !preloadedWriting) {
       generateWritingTask().then(setPreloadedWriting).catch(e => console.error("BG Load Writing Failed", e));
     }
-
-    // 4. Preload Speaking while user is doing Writing
     if (state === AppState.TEST_WRITING && !preloadedSpeaking) {
       generateSpeakingTask().then(setPreloadedSpeaking).catch(e => console.error("BG Load Speaking Failed", e));
     }
@@ -56,8 +48,6 @@ const App = () => {
 
   const updateScore = (module: keyof typeof scores, score: number) => {
     setScores(prev => ({ ...prev, [module]: score }));
-    
-    // Auto advance
     if (module === 'reading') setState(AppState.TEST_LISTENING);
     if (module === 'listening') setState(AppState.TEST_WRITING);
     if (module === 'writing') setState(AppState.TEST_SPEAKING);
@@ -108,14 +98,11 @@ const App = () => {
     }
   };
 
-  // Trigger confetti on results
   useEffect(() => {
     if (state === AppState.RESULTS) {
       const duration = 3000;
       const end = Date.now() + duration;
-
       const frame = () => {
-        // launch a few confetti from the left edge
         (window as any).confetti({
           particleCount: 2,
           angle: 60,
@@ -123,7 +110,6 @@ const App = () => {
           origin: { x: 0 },
           colors: ['#2563eb', '#9333ea', '#db2777']
         });
-        // and launch a few from the right edge
         (window as any).confetti({
           particleCount: 2,
           angle: 120,
@@ -131,63 +117,36 @@ const App = () => {
           origin: { x: 1 },
           colors: ['#2563eb', '#9333ea', '#db2777']
         });
-
-        if (Date.now() < end) {
-          requestAnimationFrame(frame);
-        }
+        if (Date.now() < end) requestAnimationFrame(frame);
       };
       frame();
     }
   }, [state]);
 
   const validatePhone = (phone: string) => {
-    // Remove all non-digits for validation
     const cleanPhone = phone.replace(/\D/g, '');
-
-    // 1. Length Check
-    if (cleanPhone.length !== 10) {
-      return "Phone number must be exactly 10 digits.";
-    }
-    
-    // 2. Start Digit Check
-    if (cleanPhone.startsWith('0')) {
-      return "Phone number cannot start with 0.";
-    }
-
-    // 3. Block Dummy Numbers (Sequential or Repeated)
+    if (cleanPhone.length !== 10) return "Phone number must be exactly 10 digits.";
+    if (cleanPhone.startsWith('0')) return "Phone number cannot start with 0.";
     const blockList = ['1234567890', '9876543210', '0123456789'];
-    if (blockList.includes(cleanPhone)) {
-      return "Please enter a valid, real phone number.";
-    }
-    
-    // Check for repeated digits (e.g., 1111111111)
-    if (/^(\d)\1+$/.test(cleanPhone)) {
-      return "Please enter a valid phone number (not repeated digits).";
-    }
-
+    if (blockList.includes(cleanPhone)) return "Please enter a valid, real phone number.";
+    if (/^(\d)\1+$/.test(cleanPhone)) return "Please enter a valid phone number (not repeated digits).";
     return null;
   };
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
-
-    // Validate Name
     if (!userDetails.name.trim()) {
       setFormError("Please enter your full name.");
       return;
     }
-
-    // Validate Phone
     const phoneError = validatePhone(userDetails.phone);
     if (phoneError) {
       setFormError(phoneError);
       return;
     }
-
     if (userDetails.name && userDetails.phone) {
       setIsSubmitting(true);
-      
       const average = getAverageScore();
       const submissionData = {
         name: userDetails.name,
@@ -200,9 +159,7 @@ const App = () => {
         averageScore: average,
         timestamp: new Date().toLocaleString()
       };
-
       await submitTestResults(submissionData);
-      
       setIsSubmitting(false);
       setState(AppState.RESULTS);
     }
@@ -213,21 +170,14 @@ const App = () => {
       case AppState.HOME:
         return (
           <div className="relative min-h-[calc(100vh-4rem)] flex flex-col justify-center overflow-hidden">
-            {/* Background Blobs */}
             <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10 opacity-60">
               <div className="absolute top-0 left-10 w-72 h-72 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob"></div>
               <div className="absolute top-0 right-10 w-72 h-72 bg-brand-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-2000"></div>
               <div className="absolute -bottom-8 left-20 w-72 h-72 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-4000"></div>
             </div>
-
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center w-full max-w-7xl mx-auto py-12 px-4 lg:px-8">
-              
-              {/* Left Column: Text & CTA */}
               <div className="space-y-8 animate-fade-in-up z-10 text-center lg:text-left">
-                
-                {/* Logo and Animation Wrapper */}
                 <div className="flex flex-col items-center lg:items-start gap-4">
-                  {/* Powered By Logo Badge */}
                   <div className="flex flex-col items-center lg:items-start space-y-1">
                       <span className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em]">Powered by</span>
                       <div className="flex items-center gap-2 bg-white/60 backdrop-blur-sm p-2 pr-4 rounded-xl border border-white/50 shadow-sm transition-transform hover:scale-105">
@@ -241,22 +191,17 @@ const App = () => {
                           <span className="text-xl font-bold text-[#2563eb] tracking-tight font-sans">german</span>
                       </div>
                   </div>
-                  
-                  {/* German Flag Bouncing Dots Animation */}
                   <div className="flex gap-2 mt-2">
                     <div className="w-3 h-3 rounded-full bg-gray-900 animate-bounce [animation-delay:-0.3s]"></div>
                     <div className="w-3 h-3 rounded-full bg-red-600 animate-bounce [animation-delay:-0.15s]"></div>
                     <div className="w-3 h-3 rounded-full bg-yellow-500 animate-bounce"></div>
                   </div>
                 </div>
-                
                 <h1 className="text-5xl lg:text-7xl font-extrabold text-gray-900 leading-tight tracking-tight">
                   Test Your <br />
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-600 to-purple-600">
                     German A1 Proficiency
                   </span>
-                  
-                  {/* Animated Subtitle Component */}
                   <div className="mt-6 flex flex-row items-center justify-center lg:justify-start gap-3">
                      <div className="bg-white p-2 rounded-xl shadow-md animate-bounce">
                          <Sparkles className="w-6 h-6 text-brand-500" />
@@ -266,12 +211,10 @@ const App = () => {
                      </span>
                   </div>
                 </h1>
-                
                 <p className="text-xl text-gray-600 max-w-xl mx-auto lg:mx-0 leading-relaxed">
                   Prepare with confidence using our comprehensive mock test. 
                   We simulate the real exam structure for Reading, Listening, Writing, and Speaking using advanced AI to grade you instantly.
                 </p>
-
                 <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4 justify-center lg:justify-start">
                   <button
                     onClick={() => setState(AppState.TEST_READING)}
@@ -285,8 +228,6 @@ const App = () => {
                   </button>
                 </div>
               </div>
-
-              {/* Right Column: Lottie Animation */}
               <div className="relative animate-fade-in-up delay-200 hidden lg:block h-[500px]">
                 {/* @ts-ignore */}
                 <lottie-player
@@ -297,12 +238,9 @@ const App = () => {
                   autoplay
                   class="w-full h-full drop-shadow-2xl"
                 ></lottie-player>
-                 {/* Fallback visual if lottie fails or just decoration */}
                  <div className="absolute -z-10 inset-10 bg-gradient-to-tr from-brand-100 to-purple-100 rounded-full blur-3xl opacity-50"></div>
               </div>
             </div>
-
-            {/* Feature Cards */}
             <div className="max-w-7xl mx-auto px-4 lg:px-8 pb-12 w-full mt-10">
                <p className="text-center text-gray-400 font-medium uppercase tracking-widest text-sm mb-8">What's included in the test</p>
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -312,11 +250,7 @@ const App = () => {
                   { icon: PenTool, label: 'Schreiben (Writing)', desc: 'Form filling & short messages', color: 'text-pink-500', bg: 'bg-pink-50' },
                   { icon: Mic, label: 'Sprechen (Speaking)', desc: 'Self-introduction & conversation', color: 'text-orange-500', bg: 'bg-orange-50' }
                 ].map((item, i) => (
-                  <div 
-                    key={i} 
-                    className="group bg-white/80 backdrop-blur-sm p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-default"
-                    style={{ animationDelay: `${i * 100}ms` }}
-                  >
+                  <div key={i} className="group bg-white/80 backdrop-blur-sm p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-default">
                     <div className={`w-12 h-12 ${item.bg} rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
                       <item.icon className={`w-6 h-6 ${item.color}`} />
                     </div>
@@ -328,19 +262,14 @@ const App = () => {
             </div>
           </div>
         );
-
       case AppState.TEST_READING:
         return <ReadingModule preloadedData={preloadedReading} onComplete={(s) => updateScore('reading', s)} />;
-      
       case AppState.TEST_LISTENING:
         return <ListeningModule preloadedData={preloadedListening} onComplete={(s) => updateScore('listening', s)} />;
-      
       case AppState.TEST_WRITING:
         return <WritingModule preloadedTask={preloadedWriting} onComplete={(s) => updateScore('writing', s)} />;
-      
       case AppState.TEST_SPEAKING:
         return <SpeakingModule preloadedTask={preloadedSpeaking} onComplete={(s) => updateScore('speaking', s)} />;
-
       case AppState.USER_DETAILS_FORM:
         return (
           <div className="min-h-[600px] flex items-center justify-center p-4">
@@ -352,7 +281,6 @@ const App = () => {
                 <h2 className="text-2xl font-bold text-gray-900">Final Step</h2>
                 <p className="text-gray-600 mt-2">Enter your details to generate your score report.</p>
               </div>
-
               <form onSubmit={handleFormSubmit} className="space-y-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
@@ -372,7 +300,6 @@ const App = () => {
                     disabled={isSubmitting}
                   />
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                     <Phone className="w-4 h-4" />
@@ -383,12 +310,8 @@ const App = () => {
                     required
                     value={userDetails.phone}
                     onChange={(e) => {
-                      // Strip non-numeric characters immediately for clean state
                       const val = e.target.value.replace(/\D/g, '');
-                      // Enforce a reasonable max length (e.g. 15) to prevent overflow, validation handles exact 10
-                      if (val.length <= 15) {
-                        setUserDetails({ ...userDetails, phone: val });
-                      }
+                      if (val.length <= 15) setUserDetails({ ...userDetails, phone: val });
                       setFormError(null);
                     }}
                     className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-brand-500 outline-none transition-all ${formError && formError.includes('Phone') ? 'border-red-500 bg-red-50 focus:border-red-500' : 'border-gray-300 focus:border-brand-500'}`}
@@ -396,7 +319,6 @@ const App = () => {
                     disabled={isSubmitting}
                   />
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                     <Globe className="w-4 h-4" />
@@ -413,14 +335,12 @@ const App = () => {
                     <option value="Other">Other</option>
                   </select>
                 </div>
-
                 {formError && (
                   <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700 text-sm animate-fade-in-up">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
                     <span>{formError}</span>
                   </div>
                 )}
-
                 <button
                   type="submit"
                   disabled={isSubmitting}
@@ -439,11 +359,9 @@ const App = () => {
             </div>
           </div>
         );
-
       case AppState.RESULTS:
         const average = getAverageScore();
         const tips = getExamTips(average);
-        
         return (
           <div className="flex flex-col items-center max-w-2xl mx-auto space-y-8 animate-fade-in py-10 relative px-4">
             <div className="text-center space-y-4 mb-8">
@@ -456,7 +374,6 @@ const App = () => {
                 <p className="text-lg text-gray-600 mt-2">You have completed the full A1 Mock Test.</p>
               </div>
             </div>
-
             <div className="w-full bg-white p-8 rounded-2xl shadow-xl border border-gray-100 transform hover:scale-[1.01] transition-transform duration-500">
                <div className="flex flex-col md:flex-row justify-between items-center mb-8 pb-8 border-b border-gray-100">
                   <div className="text-center md:text-left mb-4 md:mb-0">
@@ -467,7 +384,6 @@ const App = () => {
                     <span className="text-4xl font-extrabold">{average}%</span>
                   </div>
                </div>
-
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                  {[
                    { label: 'Reading (Lesen)', score: scores.reading, icon: BookOpen, color: 'text-blue-500', bg: 'bg-blue-50' },
@@ -487,8 +403,6 @@ const App = () => {
                  ))}
                </div>
             </div>
-
-            {/* Exam Tips Section */}
             <div className={`w-full p-6 rounded-2xl border ${tips.border} ${tips.bg} shadow-md animate-fade-in-up delay-150`}>
               <div className="flex items-start space-x-4">
                 <div className={`p-3 bg-white rounded-full shadow-sm flex-shrink-0 ${tips.iconColor}`}>
@@ -500,7 +414,6 @@ const App = () => {
                 </div>
               </div>
             </div>
-
             <button
               onClick={() => {
                 setScores({ reading: 0, listening: 0, writing: 0, speaking: 0 });
@@ -518,7 +431,6 @@ const App = () => {
             </button>
           </div>
         );
-
       default:
         return null;
     }
@@ -526,14 +438,12 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-brand-200">
-      {/* Header */}
       <header className="bg-white/90 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50 transition-all duration-300">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-2 cursor-pointer group" onClick={() => setState(AppState.HOME)}>
              <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center text-white font-bold group-hover:bg-brand-700 transition-colors shadow-sm">G</div>
              <span className="font-bold text-xl tracking-tight text-gray-900">German A1 <span className="text-brand-600">Mock Test</span></span>
           </div>
-          
           {state !== AppState.HOME && state !== AppState.RESULTS && state !== AppState.USER_DETAILS_FORM && (
              <div className="hidden md:flex items-center space-x-2 text-sm font-medium text-gray-500">
                 <span className={`px-2 py-1 rounded ${state === AppState.TEST_READING ? 'bg-brand-50 text-brand-700' : ''}`}>Lesen</span>
@@ -547,8 +457,6 @@ const App = () => {
           )}
         </div>
       </header>
-
-      {/* Main Content */}
       <main className="w-full">
         {renderContent()}
       </main>
