@@ -6,7 +6,7 @@ import WritingModule from './components/modules/WritingModule.tsx';
 import SpeakingModule from './components/modules/SpeakingModule.tsx';
 import { submitTestResults } from './services/submissionService.ts';
 import { generateReadingTest, preloadListeningTest, generateWritingTask, generateSpeakingTask } from './services/geminiService.ts';
-import { BookOpen, Headphones, PenTool, Mic, Award, RotateCcw, ArrowRight, Star, Sparkles, User, Phone, Globe, Lightbulb, Loader2, AlertCircle } from 'lucide-react';
+import { BookOpen, Headphones, PenTool, Mic, Award, RotateCcw, ArrowRight, Sparkles, User, Phone, Globe, Lightbulb, Loader2, AlertCircle } from 'lucide-react';
 
 const App = () => {
   const [state, setState] = useState<AppState>(AppState.HOME);
@@ -32,7 +32,6 @@ const App = () => {
 
   // --- PRELOADING LOGIC ---
   useEffect(() => {
-    // Rely exclusively on process.env.API_KEY per rules
     if (state === AppState.HOME && !preloadedReading) {
       generateReadingTest().then(setPreloadedReading).catch(e => console.error("BG Load Reading Failed", e));
     }

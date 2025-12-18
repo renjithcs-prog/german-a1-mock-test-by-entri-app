@@ -2,11 +2,14 @@ import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { ReadingTestContent, ListeningTestContent, WritingTask, SpeakingTask, EvaluationResult } from "../types.ts";
 
 const modelGeneration = 'gemini-3-flash-preview';
-const modelEvaluation = 'gemini-3-flash-preview'; // Switched to flash for standard text evaluation
+const modelEvaluation = 'gemini-3-flash-preview'; 
 const modelTTS = 'gemini-2.5-flash-preview-tts';
 
-// Helper to initialize AI right before use using the mandated environment variable
-const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
+// The platform automatically injects process.env.API_KEY. 
+// We create a fresh instance per call to ensure we catch any updates to the environment.
+const getAI = () => {
+  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+};
 
 const cleanJson = (text: string) => text.replace(/```json\n?|\n?```/g, '').trim();
 
@@ -26,6 +29,7 @@ const runWithRetry = async <T>(operation: () => Promise<T>, retries = 3, baseDel
     } catch (error: any) {
       lastError = error;
       const errorMsg = (error.message || JSON.stringify(error)).toLowerCase();
+      // Only retry on transient server errors or rate limits
       const isTransient = errorMsg.includes('503') || errorMsg.includes('overloaded') || errorMsg.includes('unavailable') || errorMsg.includes('quota') || errorMsg.includes('429');
       if (isTransient && i < retries - 1) {
         const delay = baseDelay * Math.pow(2, i);
