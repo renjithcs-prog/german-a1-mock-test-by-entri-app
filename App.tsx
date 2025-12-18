@@ -6,11 +6,10 @@ import WritingModule from './components/modules/WritingModule.tsx';
 import SpeakingModule from './components/modules/SpeakingModule.tsx';
 import { submitTestResults } from './services/submissionService.ts';
 import { generateReadingTest, preloadListeningTest, generateWritingTask, generateSpeakingTask } from './services/geminiService.ts';
-import { BookOpen, Headphones, PenTool, Mic, Award, RotateCcw, ArrowRight, Star, Sparkles, User, Phone, Globe, Lightbulb, Loader2, AlertCircle, Key } from 'lucide-react';
+import { BookOpen, Headphones, PenTool, Mic, Award, RotateCcw, ArrowRight, Star, Sparkles, User, Phone, Globe, Lightbulb, Loader2, AlertCircle } from 'lucide-react';
 
 const App = () => {
   const [state, setState] = useState<AppState>(AppState.HOME);
-  const [hasKey, setHasKey] = useState<boolean>(!!process.env.API_KEY);
   const [scores, setScores] = useState({
     reading: 0,
     listening: 0,
@@ -25,24 +24,6 @@ const App = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Check for selected API key if environment key is missing
-  useEffect(() => {
-    const checkKey = async () => {
-      if (!process.env.API_KEY && (window as any).aistudio) {
-        const selected = await (window as any).aistudio.hasSelectedApiKey();
-        if (selected) setHasKey(true);
-      }
-    };
-    checkKey();
-  }, []);
-
-  const handleOpenKeySelector = async () => {
-    if ((window as any).aistudio) {
-      await (window as any).aistudio.openSelectKey();
-      setHasKey(true); // Proceed after triggering dialog
-    }
-  };
-
   // --- PRELOADING STATE ---
   const [preloadedReading, setPreloadedReading] = useState<any>(null);
   const [preloadedListening, setPreloadedListening] = useState<any>(null);
@@ -51,8 +32,7 @@ const App = () => {
 
   // --- PRELOADING LOGIC ---
   useEffect(() => {
-    if (!hasKey) return;
-    
+    // Rely exclusively on process.env.API_KEY per rules
     if (state === AppState.HOME && !preloadedReading) {
       generateReadingTest().then(setPreloadedReading).catch(e => console.error("BG Load Reading Failed", e));
     }
@@ -65,7 +45,7 @@ const App = () => {
     if (state === AppState.TEST_WRITING && !preloadedSpeaking) {
       generateSpeakingTask().then(setPreloadedSpeaking).catch(e => console.error("BG Load Speaking Failed", e));
     }
-  }, [state, preloadedReading, preloadedListening, preloadedWriting, preloadedSpeaking, hasKey]);
+  }, [state, preloadedReading, preloadedListening, preloadedWriting, preloadedSpeaking]);
 
   const updateScore = (module: keyof typeof scores, score: number) => {
     setScores(prev => ({ ...prev, [module]: score }));
@@ -180,31 +160,6 @@ const App = () => {
     setIsSubmitting(false);
     setState(AppState.RESULTS);
   };
-
-  if (!hasKey) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
-        <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 text-center animate-fade-in-up border border-slate-100">
-          <div className="w-20 h-20 bg-brand-100 rounded-2xl flex items-center justify-center mx-auto mb-6 text-brand-600">
-            <Key className="w-10 h-10" />
-          </div>
-          <h1 className="text-3xl font-extrabold text-slate-900 mb-4">API Key Required</h1>
-          <p className="text-slate-600 mb-8 leading-relaxed">
-            To provide high-quality AI evaluation using Gemini 3 models, you need to select a billing-enabled API key from your project.
-          </p>
-          <button
-            onClick={handleOpenKeySelector}
-            className="w-full py-4 bg-brand-600 text-white rounded-2xl font-bold text-lg hover:bg-brand-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1"
-          >
-            Initialize Mock Test
-          </button>
-          <p className="mt-6 text-xs text-slate-400">
-            A link to billing documentation can be found at <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="underline hover:text-brand-500">ai.google.dev/gemini-api/docs/billing</a>
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   const renderContent = () => {
     switch (state) {

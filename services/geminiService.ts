@@ -2,10 +2,10 @@ import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { ReadingTestContent, ListeningTestContent, WritingTask, SpeakingTask, EvaluationResult } from "../types.ts";
 
 const modelGeneration = 'gemini-3-flash-preview';
-const modelEvaluation = 'gemini-3-pro-preview';
+const modelEvaluation = 'gemini-3-flash-preview'; // Switched to flash for standard text evaluation
 const modelTTS = 'gemini-2.5-flash-preview-tts';
 
-// Helper to initialize AI right before use
+// Helper to initialize AI right before use using the mandated environment variable
 const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const cleanJson = (text: string) => text.replace(/```json\n?|\n?```/g, '').trim();
